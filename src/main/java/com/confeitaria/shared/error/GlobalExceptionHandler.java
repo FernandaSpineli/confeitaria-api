@@ -1,5 +1,7 @@
 package com.confeitaria.shared.error;
 
+import com.confeitaria.estoque.domain.EstoqueException;
+import com.confeitaria.estoque.domain.EstoqueInsuficienteException;
 import com.confeitaria.precificacao.domain.MargemInviavelException;
 import com.confeitaria.precificacao.domain.PrecificacaoException;
 import java.net.URI;
@@ -61,7 +63,18 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "Não foi possível calcular o preço", ex.getMessage());
     }
 
+    @ExceptionHandler(EstoqueInsuficienteException.class)
+    ProblemDetail estoqueInsuficiente(EstoqueInsuficienteException ex) {
+        ProblemDetail problem = problema(HttpStatus.UNPROCESSABLE_CONTENT, "estoque-insuficiente",
+                "Estoque insuficiente", ex.getMessage());
+        problem.setProperty("itensFaltantes", ex.itensFaltantes());
+        return problem;
+    }
 
+    @ExceptionHandler(EstoqueException.class)
+    ProblemDetail estoque(EstoqueException ex) {
+        return problema(HttpStatus.UNPROCESSABLE_CONTENT, "estoque", "Operação de estoque inválida", ex.getMessage());
+    }
 
     @ExceptionHandler(ConflitoException.class)
     ProblemDetail conflito(ConflitoException ex) {

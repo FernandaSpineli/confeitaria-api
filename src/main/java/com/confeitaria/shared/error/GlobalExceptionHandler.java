@@ -1,5 +1,7 @@
 package com.confeitaria.shared.error;
 
+import com.confeitaria.precificacao.domain.MargemInviavelException;
+import com.confeitaria.precificacao.domain.PrecificacaoException;
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -45,7 +47,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(MargemInviavelException.class)
+    ProblemDetail margemInviavel(MargemInviavelException ex) {
+        ProblemDetail problem = problema(HttpStatus.UNPROCESSABLE_CONTENT, "margem-inviavel",
+                "Margem inviável", ex.getMessage());
+        problem.setProperty("canaisInvalidos", ex.canaisInvalidos());
+        return problem;
+    }
 
+    @ExceptionHandler(PrecificacaoException.class)
+    ProblemDetail precificacao(PrecificacaoException ex) {
+        return problema(HttpStatus.UNPROCESSABLE_CONTENT, "precificacao",
+                "Não foi possível calcular o preço", ex.getMessage());
+    }
 
 
 

@@ -5,6 +5,7 @@ import com.confeitaria.auth.api.AuthDtos.RegisterRequest;
 import com.confeitaria.auth.api.AuthDtos.TokenResponse;
 import com.confeitaria.auth.persistence.RefreshToken;
 import com.confeitaria.auth.persistence.RefreshTokenRepository;
+import com.confeitaria.configuracao.application.ConfiguracaoService;
 import com.confeitaria.shared.error.ConflitoException;
 import com.confeitaria.shared.error.CredenciaisInvalidasException;
 import com.confeitaria.shared.security.JwtProperties;
@@ -43,16 +44,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
     private final JwtProperties jwtProperties;
+    private final ConfiguracaoService configuracaoService;
     private final Clock clock;
 
     public AuthService(UsuarioRepository usuarios, RefreshTokenRepository refreshTokens,
             PasswordEncoder passwordEncoder, TokenService tokenService, JwtProperties jwtProperties,
-            Clock clock) {
+            ConfiguracaoService configuracaoService, Clock clock) {
         this.usuarios = usuarios;
         this.refreshTokens = refreshTokens;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
         this.jwtProperties = jwtProperties;
+        this.configuracaoService = configuracaoService;
         this.clock = clock;
     }
 
@@ -64,6 +67,7 @@ public class AuthService {
         }
         Usuario usuario = usuarios.save(new Usuario(request.nome(), email,
                 passwordEncoder.encode(request.senha()), Perfil.CONFEITEIRA, clock.instant()));
+        configuracaoService.criarPadrao(usuario.getId());
         return UsuarioResponse.of(usuario);
     }
 

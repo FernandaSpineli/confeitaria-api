@@ -29,6 +29,25 @@ mvn verify
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | `15m` / `7d` | validade dos tokens |
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | localhost/confeitaria | conexão PostgreSQL |
 | `APP_ADMIN_EMAIL`, `APP_ADMIN_PASSWORD` | vazio | cria a primeira ADMIN na subida |
+| `APP_DEMO_ENABLED` | `false` | cria a conta de demonstração `demo@exemplo.com` / `senha12345` com a torta holandesa em 3 tamanhos |
+
+## Tamanhos de receita
+
+A mesma receita pode virar produtos diferentes. Cada **tamanho** diz quanto da receita usa (`fracaoReceita`:
+1 = inteira, 0,5 = meia), quantas peças rende e qual embalagem vai em cada peça. Ingredientes, trabalho, energia,
+gás e custos fixos entram na proporção usada; a embalagem do tamanho entra uma vez por peça. O preço, a
+simulação, a capacidade de produção e a baixa no estoque aceitam o tamanho.
+
+A conta de demonstração traz a torta holandesa (receita inteira: R$ 55 de produtos, 1 h de trabalho a R$ 10/h,
+margem de 40%, embalagem de R$ 1 por peça):
+
+| Tamanho | Usa | Rende | Custo | Preço |
+|---|---|---|---|---|
+| Torta grande | a receita inteira | 1 torta | 55 + 10 + 1 = R$ 66,00 | **R$ 110,00** |
+| Torta pequena | meia receita | 1 torta | 27,50 + 5 + 1 = R$ 33,50 | **R$ 55,83** |
+| Pote individual | a receita inteira | 8 potes | (55 + 10) / 8 + 1 = R$ 9,125 cada | **R$ 15,21** cada |
+
+O custo do pote aparece como R$ 9,12 (arredondamento `HALF_EVEN`), mas o preço usa o valor exato.
 
 ## Aplicação web
 
@@ -123,6 +142,7 @@ fica onde ele paga: nos cálculos.
 | Dinheiro e quantidades | `BigDecimal` em tudo, cálculo em escala 10 com `HALF_EVEN`, saída em 2 casas. `custo_unitario` em `NUMERIC(20,10)` porque o custo por grama é pequeno. |
 | Unidades | Base `g`, `ml`, `un`. A API aceita `KG`/`L` e converte. |
 | Itens da receita | `base`: `POR_LOTE` (quantidade para a receita inteira) ou `POR_UNIDADE` (multiplicada pelo rendimento). |
+| Tamanhos | `receita_tamanho` (fração da receita, peças, embalagem por peça). O cálculo multiplica o lote pela fração; custos fixos por horas seguem a fração e por vendas contam cada peça. A produção guarda o nome do tamanho e as peças feitas, então editar a receita não muda o histórico. |
 | Tarifas | Histórico com vigência (`tarifa_energia`, `adicional_bandeira`). Vale o registro com maior `vigencia_inicio` ≤ hoje (America/Sao_Paulo). VERDE sem cadastro = adicional zero. |
 | Estoque | O saldo só muda por movimentação (`ENTRADA`, `SAIDA`, `AJUSTE`). O histórico é `@Immutable` e um trigger bloqueia UPDATE/DELETE. |
 | Concorrência | `@Version` em insumo e embalagem. Compras, ajustes e produções rodam em `ExecutorComRetry` (até 5 tentativas com jitter) e, se esgotar, respondem **409**. |
@@ -139,7 +159,8 @@ usuario 1─N insumo | embalagem | equipamento | custo_fixo | canal_venda | rece
 receita 1─N receita_insumo      N─1 insumo        (quantidade na unidade base + base POR_LOTE/POR_UNIDADE)
 receita 1─N receita_embalagem   N─1 embalagem     (quantidade + base)
 receita 1─N receita_equipamento N─1 equipamento   (minutos de uso)
-producao N─1 receita
+receita 1─N receita_tamanho     N─1 embalagem     (fração da receita, peças, embalagem por peça; opcional)
+producao N─1 receita                              (nome do tamanho e peças produzidas guardados na produção)
 movimentacao_estoque N─1 insumo XOR embalagem, N─1 producao (opcional)
 ```
 
@@ -154,7 +175,8 @@ com.confeitaria
 ├── configuracao  custos da confeiteira, histórico de tarifa e bandeiras
 ├── insumo · embalagem · equipamento · custofixo · canalvenda · receita
 ├── precificacao  domain (puro) · application · api
-└── estoque       domain (puro) · application (estoque, produção, retry) · persistence · api
+├── estoque       domain (puro) · application (estoque, produção, retry) · persistence · api
+└── demo          conta de demonstração (APP_DEMO_ENABLED)
 ```
 
 ## Autenticação
@@ -184,28 +206,29 @@ Prefixo `/api/v1`. 🔓 público · 🔐 autenticado · 👩‍🍳 CONFEITEIRA 
 | 👩‍🍳 | GET · POST · DELETE | `/configuracao/bandeiras?bandeira=` · `/configuracao/bandeiras` · `/configuracao/bandeiras/{id}` |
 | 👩‍🍳 | GET | `/configuracao/bandeiras/vigentes` |
 | 👩‍🍳 | CRUD | `/insumos`, `/embalagens`, `/equipamentos`, `/custos-fixos`, `/canais-venda`, `/receitas` |
-| 👩‍🍳 | GET | `/receitas/{id}/preco` |
-| 👩‍🍳 | POST | `/receitas/{id}/simulacao` (`margemLucro`, `bandeira`, `tarifaKwh`, `canalVendaId`, `taxaPercentual`) |
-| 👩‍🍳 | GET | `/receitas/{id}/capacidade-producao` |
+| 👩‍🍳 | GET | `/receitas/{id}/preco?tamanhoId=` |
+| 👩‍🍳 | POST | `/receitas/{id}/simulacao` (`margemLucro`, `bandeira`, `tarifaKwh`, `canalVendaId`, `taxaPercentual`, `tamanhoId`) |
+| 👩‍🍳 | GET | `/receitas/{id}/capacidade-producao?tamanhoId=` |
 | 👩‍🍳 | POST | `/estoque/compras`, `/estoque/ajustes` |
 | 👩‍🍳 | GET | `/estoque/movimentacoes?tipo=&insumoId=&embalagemId=&de=&ate=` |
 | 👩‍🍳 | GET | `/estoque/abaixo-minimo` |
-| 👩‍🍳 | POST · GET · GET | `/producoes` · `/producoes` · `/producoes/{id}` |
+| 👩‍🍳 | POST · GET · GET | `/producoes` (`receitaId`, `lotes`, `tamanhoId`) · `/producoes` · `/producoes/{id}` |
 
 Exclusões de insumo, embalagem, equipamento e receita são lógicas (`ativo=false`). Excluir um item usado em
-receita ativa responde 409.
+receita ativa (ou como embalagem de um tamanho) responde 409.
 
 ## Testes
 
 | Suíte | O que cobre |
 |---|---|
-| `CalculadoraPrecoTest` | exemplo completo do bolo, margem × markup, taxas, `POR_UNIDADE`, rateio por horas/vendas, margem + taxa ≥ 100%, dados faltantes, HALF_EVEN |
+| `CalculadoraPrecoTest` | exemplo completo do bolo, margem × markup, taxas, `POR_UNIDADE`, rateio por horas/vendas, margem + taxa ≥ 100%, dados faltantes, HALF_EVEN, tamanhos (torta grande, pequena e pote) |
 | `PlanejadorBaixaTest`, `CalculadoraCapacidadeTest`, `CalculadoraCustoMedioTest` | baixa proporcional, faltantes listados, saldo negativo opcional, itens repetidos, precisão, limites |
 | `ProducaoServiceTest` (Mockito) | baixa + histórico, nada muda quando falta estoque, receita alheia → 404 |
 | `IsolamentoEntreUsuariasIT` | toda leitura/escrita cruzada responde 404, listagens isoladas, perfis 401/403 |
 | `AutenticacaoIT` | validação, login, rotação e detecção de reuso do refresh, logout, desativação pela admin |
 | `FrontendIT` | página e arquivos estáticos públicos, demais caminhos e métodos continuam fechados |
 | `FluxoBoloIT` | o [exemplo do bolo](docs/exemplo-bolo.md) inteiro pela API, mais o trigger de imutabilidade |
+| `TortaHolandesaIT` | preço, simulação, capacidade e produção por tamanho; nomes repetidos, tamanho de outra receita, embalagem em uso; a conta de demonstração |
 | `ConcorrenciaProducaoIT` | 20 produções simultâneas sobre estoque para 10 lotes: saldo consistente e nunca negativo |
 
 ## Exemplo

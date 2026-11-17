@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -31,7 +32,8 @@ public final class ReceitaDtos {
             @PositiveOrZero Integer vendasEstimadasMes,
             @Valid List<ItemInsumoRequest> insumos,
             @Valid List<ItemEmbalagemRequest> embalagens,
-            @Valid List<ItemEquipamentoRequest> equipamentos) {
+            @Valid List<ItemEquipamentoRequest> equipamentos,
+            @Valid @Size(max = 10) List<TamanhoRequest> tamanhos) {
 
         public List<ItemInsumoRequest> insumosOuVazio() {
             return insumos == null ? List.of() : insumos;
@@ -44,6 +46,22 @@ public final class ReceitaDtos {
         public List<ItemEquipamentoRequest> equipamentosOuVazio() {
             return equipamentos == null ? List.of() : equipamentos;
         }
+
+        public List<TamanhoRequest> tamanhosOuVazio() {
+            return tamanhos == null ? List.of() : tamanhos;
+        }
+    }
+
+    @Schema(description = """
+            Um jeito de vender a receita. fracaoReceita: quanto da receita o tamanho usa (1 = inteira, 0.5 = meia).
+            rendimento: quantas peças saem dessa fração. embalagemId é opcional; embalagensPorPeca (padrão 1)
+            é quantas unidades da embalagem vão em cada peça.""")
+    public record TamanhoRequest(
+            @NotBlank @Size(max = 60) String nome,
+            @NotNull @Positive @DecimalMax("100") @Digits(integer = 3, fraction = 4) BigDecimal fracaoReceita,
+            @NotNull @Positive @Max(10000) Integer rendimento,
+            UUID embalagemId,
+            @Positive @Digits(integer = 10, fraction = 6) BigDecimal embalagensPorPeca) {
     }
 
     @Schema(description = "unidade é opcional (padrão: unidade base do insumo). base: POR_LOTE (padrão) ou POR_UNIDADE.")
@@ -68,7 +86,12 @@ public final class ReceitaDtos {
 
     public record ReceitaResponse(UUID id, String nome, int rendimento, int tempoPreparoMin, int minutosGas,
             BigDecimal margemLucro, Integer vendasEstimadasMes, boolean ativo, List<ItemInsumoResponse> insumos,
-            List<ItemEmbalagemResponse> embalagens, List<ItemEquipamentoResponse> equipamentos) {
+            List<ItemEmbalagemResponse> embalagens, List<ItemEquipamentoResponse> equipamentos,
+            List<TamanhoResponse> tamanhos) {
+    }
+
+    public record TamanhoResponse(UUID id, String nome, BigDecimal fracaoReceita, int rendimento, UUID embalagemId,
+            String embalagem, BigDecimal embalagensPorPeca) {
     }
 
     public record ItemInsumoResponse(UUID insumoId, String nome, BigDecimal quantidade, UnidadeBase unidade,
@@ -82,6 +105,7 @@ public final class ReceitaDtos {
     public record ItemEquipamentoResponse(UUID equipamentoId, String nome, BigDecimal potenciaWatts, int minutosUso) {
     }
 
-    public record ReceitaResumoResponse(UUID id, String nome, int rendimento, BigDecimal margemLucro, boolean ativo) {
+    public record ReceitaResumoResponse(UUID id, String nome, int rendimento, BigDecimal margemLucro, boolean ativo,
+            List<String> tamanhos) {
     }
 }

@@ -7,12 +7,14 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Entity
@@ -65,6 +67,10 @@ public class Receita {
     @OneToMany(mappedBy = "receita", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReceitaEquipamento> equipamentos = new ArrayList<>();
 
+    @OneToMany(mappedBy = "receita", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("posicao")
+    private List<ReceitaTamanho> tamanhos = new ArrayList<>();
+
     protected Receita() {
     }
 
@@ -94,6 +100,16 @@ public class Receita {
         insumos.addAll(novosInsumos);
         embalagens.addAll(novasEmbalagens);
         equipamentos.addAll(novosEquipamentos);
+    }
+
+    public void substituirTamanhos(List<ReceitaTamanho> novos) {
+        tamanhos.clear();
+        novos.forEach(t -> t.vincular(this));
+        tamanhos.addAll(novos);
+    }
+
+    public Optional<ReceitaTamanho> tamanho(UUID tamanhoId) {
+        return tamanhos.stream().filter(t -> t.getId().equals(tamanhoId)).findFirst();
     }
 
     public void desativar() {
@@ -146,5 +162,9 @@ public class Receita {
 
     public List<ReceitaEquipamento> getEquipamentos() {
         return equipamentos;
+    }
+
+    public List<ReceitaTamanho> getTamanhos() {
+        return tamanhos;
     }
 }

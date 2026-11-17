@@ -13,17 +13,25 @@ import com.confeitaria.receita.api.ReceitaDtos.ItemInsumoResponse;
 import com.confeitaria.receita.api.ReceitaDtos.ReceitaRequest;
 import com.confeitaria.receita.api.ReceitaDtos.ReceitaResponse;
 import com.confeitaria.receita.api.ReceitaDtos.ReceitaResumoResponse;
+import com.confeitaria.receita.api.ReceitaDtos.TamanhoRequest;
+import com.confeitaria.receita.api.ReceitaDtos.TamanhoResponse;
 import com.confeitaria.receita.persistence.Receita;
 import com.confeitaria.receita.persistence.ReceitaEmbalagem;
 import com.confeitaria.receita.persistence.ReceitaEquipamento;
 import com.confeitaria.receita.persistence.ReceitaInsumo;
 import com.confeitaria.receita.persistence.ReceitaRepository;
+import com.confeitaria.receita.persistence.ReceitaTamanho;
 import com.confeitaria.shared.domain.BaseQuantidade;
 import com.confeitaria.shared.domain.UnidadeMedida;
 import com.confeitaria.shared.error.RecursoNaoEncontradoException;
 import com.confeitaria.shared.error.RegraNegocioException;
+import java.math.BigDecimal;
 import java.time.Clock;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -71,7 +79,7 @@ public class ReceitaService {
     public Page<ReceitaResumoResponse> listar(UUID ownerId, String nome, Pageable pageable) {
         return receitas.findByOwnerIdAndAtivoTrueAndNomeContainingIgnoreCase(ownerId, nome == null ? "" : nome, pageable)
                 .map(rc -> new ReceitaResumoResponse(rc.getId(), rc.getNome(), rc.getRendimento(), rc.getMargemLucro(),
-                        rc.isAtivo()));
+                        rc.isAtivo(), rc.getTamanhos().stream().map(ReceitaTamanho::getNome).toList()));
     }
 
     @Transactional
@@ -103,6 +111,25 @@ public class ReceitaService {
         }).toList();
 
         receita.substituirItens(itensInsumo, itensEmbalagem, itensEquipamento);
+        receita.substituirTamanhos(tamanhos(ownerId, r.tamanhosOuVazio()));
+    }
+
+    private List<ReceitaTamanho> tamanhos(UUID ownerId, List<TamanhoRequest> pedidos) {
+        Set<String> nomes = new HashSet<>();
+        List<ReceitaTamanho> lista = new ArrayList<>();
+        for (TamanhoRequest t : pedidos) {
+            String nome = t.nome().strip();
+            if (!nomes.add(nome.toLowerCase(Locale.ROOT))) {
+                throw new RegraNegocioException("Há dois tamanhos chamados '" + nome + "'. Use nomes diferentes.");
+            }
+            Embalagem embalagem = t.embalagemId() == null ? null
+                    : embalagens.findByIdAndOwnerId(t.embalagemId(), ownerId)
+                            .filter(Embalagem::isAtivo)
+                            .orElseThrow(() -> new RecursoNaoEncontradoException("Embalagem " + t.embalagemId()));
+            BigDecimal porPeca = t.embalagensPorPeca() == null ? BigDecimal.ONE : t.embalagensPorPeca();
+            lista.add(new ReceitaTamanho(nome, t.fracaoReceita(), t.rendimento(), embalagem, porPeca, lista.size()));
+        }
+        return lista;
     }
 
     private ReceitaInsumo itemInsumo(UUID ownerId, ItemInsumoRequest i) {
@@ -132,6 +159,10 @@ public class ReceitaService {
                         e.getEmbalagem().getNome(), e.getQuantidade(), e.getBase(),
                         e.getBase().quantidadePorLote(e.getQuantidade(), rend))).toList(),
                 r.getEquipamentos().stream().map(e -> new ItemEquipamentoResponse(e.getEquipamento().getId(),
-                        e.getEquipamento().getNome(), e.getEquipamento().getPotenciaWatts(), e.getMinutosUso())).toList());
+                        e.getEquipamento().getNome(), e.getEquipamento().getPotenciaWatts(), e.getMinutosUso())).toList(),
+                r.getTamanhos().stream().map(t -> new TamanhoResponse(t.getId(), t.getNome(), t.getFracaoReceita(),
+                        t.getRendimento(), t.getEmbalagem() == null ? null : t.getEmbalagem().getId(),
+                        t.getEmbalagem() == null ? null : t.getEmbalagem().getNome(), t.getEmbalagensPorPeca()))
+                        .toList());
     }
 }

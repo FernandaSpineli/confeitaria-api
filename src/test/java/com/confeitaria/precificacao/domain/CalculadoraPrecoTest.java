@@ -297,4 +297,90 @@ class CalculadoraPrecoTest {
             assertThat(calculadora.calcular(p).composicaoLote().insumos()).isEqualByComparingTo("0.01");
         }
     }
+
+    @Nested
+    @DisplayName("Tamanhos: torta holandesa grande, pequena e no pote")
+    class Tamanhos {
+
+        /** Receita inteira: produtos R$ 55, 1 h de trabalho a R$ 10/h, margem 40%, sem embalagem própria. */
+        private ParametrosPrecificacao torta(RateioCustosFixos rateio) {
+            return new ParametrosPrecificacao(1, 60, 0, d("0.40"),
+                    List.of(item("Produtos", "un", "1", BaseQuantidade.POR_LOTE, "55.00")), List.of(), List.of(),
+                    new MaoDeObra(d("1600"), d("160")), null, null, rateio, List.of());
+        }
+
+        private ParametrosPrecificacao torta() {
+            return torta(new RateioCustosFixos(Criterio.HORAS, BigDecimal.ZERO, d("160"), 0));
+        }
+
+        private static ParametrosPrecificacao.Tamanho tamanho(String nome, String fracao, int pecas) {
+            return new ParametrosPrecificacao.Tamanho(nome, d(fracao), pecas,
+                    item("Embalagem", "un", "1", BaseQuantidade.POR_UNIDADE, "1.00"));
+        }
+
+        @Test
+        void tortaGrandeUsaAReceitaInteiraMaisACaixa() {
+            var r = calculadora.calcular(torta().comTamanho(tamanho("Grande", "1", 1)));
+            assertThat(r.composicaoLote().insumos()).isEqualByComparingTo("55.00");
+            assertThat(r.composicaoLote().maoDeObra()).isEqualByComparingTo("10.00");
+            assertThat(r.composicaoLote().embalagens()).isEqualByComparingTo("1.00");
+            assertThat(r.composicaoLote().total()).isEqualByComparingTo("66.00");
+            assertThat(r.rendimento()).isEqualTo(1);
+            assertThat(r.precoBase().preco()).isEqualByComparingTo("110.00");
+        }
+
+        @Test
+        void tortaPequenaUsaMetadeDosProdutosEDoTrabalho() {
+            var r = calculadora.calcular(torta().comTamanho(tamanho("Pequena", "0.5", 1)));
+            assertThat(r.composicaoLote().insumos()).isEqualByComparingTo("27.50");
+            assertThat(r.composicaoLote().maoDeObra()).isEqualByComparingTo("5.00");
+            assertThat(r.composicaoLote().embalagens()).isEqualByComparingTo("1.00");
+            assertThat(r.composicaoLote().total()).isEqualByComparingTo("33.50");
+            assertThat(r.precoBase().preco()).isEqualByComparingTo("55.83");
+        }
+
+        @Test
+        void potesDividemAReceitaPorOitoEUsamUmPoteCada() {
+            var r = calculadora.calcular(torta().comTamanho(tamanho("Pote", "1", 8)));
+            assertThat(r.composicaoLote().embalagens()).isEqualByComparingTo("8.00");
+            assertThat(r.composicaoLote().total()).isEqualByComparingTo("73.00");
+            assertThat(r.rendimento()).isEqualTo(8);
+            // 73 / 8 = 9,125: exibido como 9,12 (HALF_EVEN), mas o preço usa o valor exato: 9,125 / 0,60 = 15,208
+            assertThat(r.custoUnitario()).isEqualByComparingTo("9.12");
+            assertThat(r.precoBase().preco()).isEqualByComparingTo("15.21");
+            assertThat(r.detalhamento()).filteredOn(l -> l.componente() == Componente.EMBALAGEM)
+                    .singleElement().satisfies(l -> assertThat(l.quantidade()).isEqualByComparingTo("8"));
+        }
+
+        @Test
+        void semTamanhoOPrecoEDaReceitaInteiraSemEmbalagem() {
+            var r = calculadora.calcular(torta());
+            assertThat(r.composicaoLote().total()).isEqualByComparingTo("65.00");
+            assertThat(r.precoBase().preco()).isEqualByComparingTo("108.33");
+        }
+
+        @Test
+        void custosFixosPorVendasEntramUmaVezPorPeca() {
+            // R$ 100 por mês / 50 vendas = R$ 2 por peça vendida
+            var porVendas = torta(new RateioCustosFixos(Criterio.VENDAS, d("100"), d("160"), 50));
+            assertThat(calculadora.calcular(porVendas.comTamanho(tamanho("Pote", "1", 8))).composicaoLote()
+                    .custosFixos()).isEqualByComparingTo("16.00");
+            assertThat(calculadora.calcular(porVendas.comTamanho(tamanho("Pequena", "0.5", 1))).composicaoLote()
+                    .custosFixos()).isEqualByComparingTo("2.00");
+        }
+
+        @Test
+        void custosFixosPorHorasAcompanhamAFracao() {
+            // R$ 160 por mês / 160 h = R$ 1 por hora; meia receita = 30 min
+            var porHoras = torta(new RateioCustosFixos(Criterio.HORAS, d("160"), d("160"), 0));
+            assertThat(calculadora.calcular(porHoras.comTamanho(tamanho("Pequena", "0.5", 1))).composicaoLote()
+                    .custosFixos()).isEqualByComparingTo("0.50");
+        }
+
+        @Test
+        void tamanhoSemPecasEhRejeitado() {
+            assertThatThrownBy(() -> calculadora.calcular(torta().comTamanho(tamanho("Vazio", "1", 0))))
+                    .isInstanceOf(PrecificacaoException.class).hasMessageContaining("Vazio");
+        }
+    }
 }

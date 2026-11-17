@@ -20,5 +20,12 @@ public interface EmbalagemRepository extends JpaRepository<Embalagem, UUID> {
     List<Embalagem> abaixoDoMinimo(@Param("ownerId") UUID ownerId);
 
     @Query("select count(re) > 0 from ReceitaEmbalagem re where re.embalagem.id = :id and re.receita.ativo = true")
-    boolean usadaEmReceitaAtiva(@Param("id") UUID id);
+    boolean usadaEmItemDeReceitaAtiva(@Param("id") UUID id);
+
+    @Query("select count(rt) > 0 from ReceitaTamanho rt where rt.embalagem.id = :id and rt.receita.ativo = true")
+    boolean usadaEmTamanhoDeReceitaAtiva(@Param("id") UUID id);
+
+    default boolean usadaEmReceitaAtiva(UUID id) {
+        return usadaEmItemDeReceitaAtiva(id) || usadaEmTamanhoDeReceitaAtiva(id);
+    }
 }

@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -52,8 +53,9 @@ public class ProducaoController {
     }
 
     @GetMapping("/api/v1/receitas/{receitaId}/capacidade-producao")
-    @Operation(summary = "Quantos lotes desta receita consigo produzir com o estoque atual?")
-    public CapacidadeResponse capacidade(@AuthenticationPrincipal UsuarioAutenticado u, @PathVariable UUID receitaId) {
-        return service.capacidade(u.id(), receitaId);
+    @Operation(summary = "Quantos lotes desta receita (ou de um tamanho dela) consigo produzir com o estoque atual?")
+    public CapacidadeResponse capacidade(@AuthenticationPrincipal UsuarioAutenticado u, @PathVariable UUID receitaId,
+            @RequestParam(required = false) UUID tamanhoId) {
+        return service.capacidade(u.id(), receitaId, tamanhoId);
     }
 }

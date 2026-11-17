@@ -34,6 +34,11 @@ app:
   admin:
     email: ${APP_ADMIN_EMAIL:}
     password: ${APP_ADMIN_PASSWORD:}
+  # Conta de demonstração com a torta holandesa em 3 tamanhos (desligada por padrão).
+  demo:
+    enabled: ${APP_DEMO_ENABLED:false}
+    email: ${APP_DEMO_EMAIL:demo@exemplo.com}
+    password: ${APP_DEMO_PASSWORD:senha12345}
 
 springdoc:
   swagger-ui:

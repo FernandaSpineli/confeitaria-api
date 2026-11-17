@@ -20,6 +20,7 @@ import com.confeitaria.estoque.persistence.ProducaoRepository;
 import com.confeitaria.estoque.persistence.TipoMovimentacao;
 import com.confeitaria.receita.persistence.Receita;
 import com.confeitaria.receita.persistence.ReceitaRepository;
+import com.confeitaria.receita.persistence.ReceitaTamanho;
 import com.confeitaria.shared.domain.Decimais;
 import com.confeitaria.shared.error.RecursoNaoEncontradoException;
 import com.confeitaria.shared.persistence.ItemEstoque;
@@ -66,9 +67,13 @@ public class ProducaoService {
     public ProducaoResponse produzir(UUID ownerId, ProducaoRequest request) {
         return executor.executar(() -> {
             Receita receita = receitaAtiva(ownerId, request.receitaId());
+            ReceitaTamanho tamanho = tamanho(receita, request.tamanhoId());
             boolean permitirNegativo = configuracaoService.obterEntidade(ownerId).isPermitirSaldoNegativo();
             Map<String, ItemEstoque> itens = new HashMap<>();
-            List<Baixa> baixas = planejador.planejar(necessidades(receita, itens), request.lotes(), permitirNegativo);
+            List<Baixa> baixas = planejador.planejar(necessidades(receita, tamanho, itens), request.lotes(),
+                    permitirNegativo);
+            String nomeTamanho = tamanho == null ? null : tamanho.getNome();
+            int unidades = request.lotes() * pecasPorLote(receita, tamanho);
 
             Instant agora = clock.instant();
             BigDecimal custoMateriais = BigDecimal.ZERO;
@@ -77,29 +82,30 @@ public class ProducaoService {
                 item.aplicarVariacao(b.quantidade().negate());
                 custoMateriais = custoMateriais.add(b.quantidade().multiply(item.getCustoUnitario()));
             }
-            Producao producao = producoes.save(new Producao(ownerId, receita, request.lotes(),
+            Producao producao = producoes.save(new Producao(ownerId, receita, nomeTamanho, request.lotes(), unidades,
                     Decimais.monetario(custoMateriais), ownerId, agora));
             List<BaixaResponse> respostas = new ArrayList<>();
             for (Baixa b : baixas) {
                 ItemEstoque item = itens.get(chave(b.tipo(), b.itemId()));
                 movimentacoes.save(new MovimentacaoEstoque(item, TipoMovimentacao.SAIDA, MotivoMovimentacao.PRODUCAO,
                         b.quantidade().negate(), item.getCustoUnitario(), null,
-                        request.lotes() + " lote(s) de " + receita.getNome(), producao, ownerId, agora));
+                        request.lotes() + " lote(s) de " + descricao(receita, tamanho), producao, ownerId, agora));
                 respostas.add(new BaixaResponse(b.tipo(), b.itemId(), b.nome(), b.unidade(), b.quantidade(),
                         item.getSaldo()));
             }
-            return new ProducaoResponse(producao.getId(), receita.getId(), receita.getNome(), request.lotes(),
-                    request.lotes() * receita.getRendimento(), producao.getCustoMateriais(), agora, respostas);
+            return new ProducaoResponse(producao.getId(), receita.getId(), receita.getNome(), nomeTamanho,
+                    request.lotes(), unidades, producao.getCustoMateriais(), agora, respostas);
         });
     }
 
     @Transactional(readOnly = true)
-    public CapacidadeResponse capacidade(UUID ownerId, UUID receitaId) {
+    public CapacidadeResponse capacidade(UUID ownerId, UUID receitaId, UUID tamanhoId) {
         Receita receita = receitaAtiva(ownerId, receitaId);
-        Capacidade c = calculadoraCapacidade.calcular(necessidades(receita, new HashMap<>()));
+        ReceitaTamanho tamanho = tamanho(receita, tamanhoId);
+        Capacidade c = calculadoraCapacidade.calcular(necessidades(receita, tamanho, new HashMap<>()));
         Necessidade n = c.limitante();
-        return new CapacidadeResponse(receita.getId(), receita.getNome(), c.lotesPossiveis(),
-                c.lotesPossiveis() * receita.getRendimento(),
+        return new CapacidadeResponse(receita.getId(), receita.getNome(), tamanho == null ? null : tamanho.getNome(),
+                c.lotesPossiveis(), c.lotesPossiveis() * pecasPorLote(receita, tamanho),
                 new FatorLimitante(n.tipo(), n.itemId(), n.nome(), n.unidade(), n.quantidadePorLote(), n.saldo()));
     }
 
@@ -121,8 +127,8 @@ public class ProducaoService {
 
     private static ProducaoResponse toResponse(Producao p, List<BaixaResponse> baixas) {
         Receita r = p.getReceita();
-        return new ProducaoResponse(p.getId(), r.getId(), r.getNome(), p.getLotes(), p.getLotes() * r.getRendimento(),
-                p.getCustoMateriais(), p.getCriadoEm(), baixas);
+        return new ProducaoResponse(p.getId(), r.getId(), r.getNome(), p.getTamanho(), p.getLotes(),
+                p.getUnidadesProduzidas(), p.getCustoMateriais(), p.getCriadoEm(), baixas);
     }
 
     private Receita receitaAtiva(UUID ownerId, UUID receitaId) {
@@ -131,23 +137,49 @@ public class ProducaoService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Receita"));
     }
 
-    /** Converte os itens da receita em necessidades por lote e indexa as entidades para a baixa. */
-    private static List<Necessidade> necessidades(Receita receita, Map<String, ItemEstoque> itens) {
+    private static ReceitaTamanho tamanho(Receita receita, UUID tamanhoId) {
+        return tamanhoId == null ? null
+                : receita.tamanho(tamanhoId).orElseThrow(() -> new RecursoNaoEncontradoException("Tamanho"));
+    }
+
+    private static int pecasPorLote(Receita receita, ReceitaTamanho tamanho) {
+        return tamanho == null ? receita.getRendimento() : tamanho.getRendimento();
+    }
+
+    private static String descricao(Receita receita, ReceitaTamanho tamanho) {
+        return tamanho == null ? receita.getNome() : receita.getNome() + " (" + tamanho.getNome() + ")";
+    }
+
+    /**
+     * Converte os itens da receita em necessidades por lote e indexa as entidades para a baixa.
+     * Com tamanho, os itens da receita são multiplicados pela fração usada e a embalagem do tamanho
+     * entra uma vez por peça.
+     */
+    private static List<Necessidade> necessidades(Receita receita, ReceitaTamanho tamanho,
+            Map<String, ItemEstoque> itens) {
         int rendimento = receita.getRendimento();
+        BigDecimal fator = tamanho == null ? BigDecimal.ONE : tamanho.getFracaoReceita();
         List<Necessidade> lista = new ArrayList<>();
         receita.getInsumos().forEach(ri -> {
             ItemEstoque item = ri.getInsumo();
             itens.put(chave(TipoItem.INSUMO, item.getId()), item);
             lista.add(new Necessidade(TipoItem.INSUMO, item.getId(), item.getNome(),
-                    item.unidadeBase().name().toLowerCase(), ri.getBase().quantidadePorLote(ri.getQuantidade(), rendimento),
-                    item.getSaldo()));
+                    item.unidadeBase().name().toLowerCase(),
+                    ri.getBase().quantidadePorLote(ri.getQuantidade(), rendimento).multiply(fator), item.getSaldo()));
         });
         receita.getEmbalagens().forEach(re -> {
             ItemEstoque item = re.getEmbalagem();
             itens.put(chave(TipoItem.EMBALAGEM, item.getId()), item);
             lista.add(new Necessidade(TipoItem.EMBALAGEM, item.getId(), item.getNome(), "un",
-                    re.getBase().quantidadePorLote(re.getQuantidade(), rendimento), item.getSaldo()));
+                    re.getBase().quantidadePorLote(re.getQuantidade(), rendimento).multiply(fator), item.getSaldo()));
         });
+        if (tamanho != null && tamanho.getEmbalagem() != null) {
+            ItemEstoque item = tamanho.getEmbalagem();
+            itens.put(chave(TipoItem.EMBALAGEM, item.getId()), item);
+            lista.add(new Necessidade(TipoItem.EMBALAGEM, item.getId(), item.getNome(), "un",
+                    tamanho.getEmbalagensPorPeca().multiply(BigDecimal.valueOf(tamanho.getRendimento())),
+                    item.getSaldo()));
+        }
         return lista;
     }
 

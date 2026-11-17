@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -28,9 +29,11 @@ public class PrecificacaoController {
     }
 
     @GetMapping("/preco")
-    @Operation(summary = "Preço sugerido com detalhamento de custos e preço por canal de venda")
-    public PrecoResponse preco(@AuthenticationPrincipal UsuarioAutenticado u, @PathVariable UUID receitaId) {
-        return service.calcular(u.id(), receitaId);
+    @Operation(summary = "Preço sugerido com detalhamento de custos e preço por canal de venda",
+            description = "Com tamanhoId, calcula o preço de um tamanho da receita (ex.: torta pequena).")
+    public PrecoResponse preco(@AuthenticationPrincipal UsuarioAutenticado u, @PathVariable UUID receitaId,
+            @RequestParam(required = false) UUID tamanhoId) {
+        return service.calcular(u.id(), receitaId, tamanhoId);
     }
 
     @PostMapping("/simulacao")

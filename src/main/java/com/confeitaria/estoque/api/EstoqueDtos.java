@@ -89,18 +89,28 @@ public final class EstoqueDtos {
             BigDecimal estoqueMinimo, BigDecimal faltaParaMinimo) {
     }
 
-    public record ProducaoRequest(@NotNull UUID receitaId, @NotNull @Positive @Max(1000) Integer lotes) {
+    @Schema(description = """
+            lotes: quantas vezes produzir. Sem tamanhoId, 1 lote = a receita inteira. Com tamanhoId, 1 lote = o
+            tamanho (ex.: 1 torta pequena = meia receita; 1 lote de potes = 8 potes).""")
+    public record ProducaoRequest(@NotNull UUID receitaId, @NotNull @Positive @Max(1000) Integer lotes,
+            UUID tamanhoId) {
+
+        public ProducaoRequest(UUID receitaId, Integer lotes) {
+            this(receitaId, lotes, null);
+        }
     }
 
     public record BaixaResponse(TipoItem tipo, UUID itemId, String item, String unidade, BigDecimal quantidade,
             BigDecimal saldoAtual) {
     }
 
-    public record ProducaoResponse(UUID id, UUID receitaId, String receita, int lotes, int unidadesProduzidas,
+    public record ProducaoResponse(UUID id, UUID receitaId, String receita, String tamanho, int lotes,
+            int unidadesProduzidas,
             BigDecimal custoMateriais, Instant criadoEm, List<BaixaResponse> baixas) {
     }
 
-    public record CapacidadeResponse(UUID receitaId, String receita, long lotesPossiveis, long unidadesPossiveis,
+    public record CapacidadeResponse(UUID receitaId, String receita, String tamanho, long lotesPossiveis,
+            long unidadesPossiveis,
             FatorLimitante fatorLimitante) {
     }
 

@@ -21,7 +21,8 @@ public final class PrecificacaoDtos {
 
     @Schema(description = """
             Todos os campos são opcionais; o que não for informado usa o valor salvo.
-            canalVendaId e/ou taxaPercentual restringem o resultado a esses canais.""")
+            canalVendaId e/ou taxaPercentual restringem o resultado a esses canais.
+            tamanhoId calcula o preço de um tamanho da receita (ex.: torta pequena).""")
     public record SimulacaoRequest(
             @PositiveOrZero @DecimalMax(value = "100.00", inclusive = false) @Digits(integer = 3, fraction = 2)
             BigDecimal margemLucro,
@@ -29,21 +30,34 @@ public final class PrecificacaoDtos {
             @Positive @Digits(integer = 3, fraction = 6) BigDecimal tarifaKwh,
             UUID canalVendaId,
             @PositiveOrZero @DecimalMax(value = "100.00", inclusive = false) @Digits(integer = 3, fraction = 2)
-            BigDecimal taxaPercentual) {
+            BigDecimal taxaPercentual,
+            UUID tamanhoId) {
 
         public static SimulacaoRequest vazia() {
-            return new SimulacaoRequest(null, null, null, null, null);
+            return new SimulacaoRequest(null, null, null, null, null, null);
+        }
+
+        public static SimulacaoRequest doTamanho(UUID tamanhoId) {
+            return new SimulacaoRequest(null, null, null, null, null, tamanhoId);
         }
     }
 
+    @Schema(description = """
+            rendimento: peças do lote calculado (do tamanho, quando houver). composicaoLote: custo desse lote.
+            tamanho é nulo quando o preço é da receita inteira.""")
     public record PrecoResponse(UUID receitaId, String receita, boolean simulacao, Bandeira bandeira,
-            int rendimento, BigDecimal margemLucro, ComposicaoCusto composicaoLote, List<LinhaCusto> detalhamento,
-            BigDecimal custoUnitario, PrecoCalculado precoBase, List<PrecoCalculado> precosPorCanal) {
+            TamanhoCalculado tamanho, int rendimento, BigDecimal margemLucro, ComposicaoCusto composicaoLote,
+            List<LinhaCusto> detalhamento, BigDecimal custoUnitario, PrecoCalculado precoBase,
+            List<PrecoCalculado> precosPorCanal) {
 
         public static PrecoResponse of(UUID receitaId, String receita, boolean simulacao, Bandeira bandeira,
-                ResultadoPrecificacao r) {
-            return new PrecoResponse(receitaId, receita, simulacao, bandeira, r.rendimento(), r.margemLucro(),
-                    r.composicaoLote(), r.detalhamento(), r.custoUnitario(), r.precoBase(), r.precosPorCanal());
+                TamanhoCalculado tamanho, ResultadoPrecificacao r) {
+            return new PrecoResponse(receitaId, receita, simulacao, bandeira, tamanho, r.rendimento(),
+                    r.margemLucro(), r.composicaoLote(), r.detalhamento(), r.custoUnitario(), r.precoBase(),
+                    r.precosPorCanal());
         }
+    }
+
+    public record TamanhoCalculado(UUID id, String nome, BigDecimal fracaoReceita, int rendimento) {
     }
 }

@@ -34,6 +34,13 @@ public class Producao {
     @Column(nullable = false)
     private int lotes;
 
+    /** Nome do tamanho produzido (nulo = receita inteira), guardado como estava no momento da produção. */
+    @Column
+    private String tamanho;
+
+    @Column(name = "unidades_produzidas", nullable = false)
+    private int unidadesProduzidas;
+
     /** Custo de insumos + embalagens baixados, pelo custo unitário do momento da produção. */
     @Column(name = "custo_materiais", nullable = false)
     private BigDecimal custoMateriais;
@@ -47,11 +54,13 @@ public class Producao {
     protected Producao() {
     }
 
-    public Producao(UUID ownerId, Receita receita, int lotes, BigDecimal custoMateriais, UUID usuarioId,
-            Instant criadoEm) {
+    public Producao(UUID ownerId, Receita receita, String tamanho, int lotes, int unidadesProduzidas,
+            BigDecimal custoMateriais, UUID usuarioId, Instant criadoEm) {
         this.ownerId = ownerId;
         this.receita = receita;
+        this.tamanho = tamanho;
         this.lotes = lotes;
+        this.unidadesProduzidas = unidadesProduzidas;
         this.custoMateriais = custoMateriais;
         this.usuarioId = usuarioId;
         this.criadoEm = criadoEm;
@@ -67,6 +76,14 @@ public class Producao {
 
     public int getLotes() {
         return lotes;
+    }
+
+    public String getTamanho() {
+        return tamanho;
+    }
+
+    public int getUnidadesProduzidas() {
+        return unidadesProduzidas;
     }
 
     public BigDecimal getCustoMateriais() {

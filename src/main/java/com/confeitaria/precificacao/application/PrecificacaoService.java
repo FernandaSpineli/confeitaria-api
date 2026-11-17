@@ -9,6 +9,7 @@ import com.confeitaria.configuracao.persistence.ConfiguracaoCustos;
 import com.confeitaria.custofixo.persistence.CustoFixoRepository;
 import com.confeitaria.precificacao.api.PrecificacaoDtos.PrecoResponse;
 import com.confeitaria.precificacao.api.PrecificacaoDtos.SimulacaoRequest;
+import com.confeitaria.precificacao.api.PrecificacaoDtos.TamanhoCalculado;
 import com.confeitaria.precificacao.domain.CalculadoraPreco;
 import com.confeitaria.precificacao.domain.ParametrosPrecificacao;
 import com.confeitaria.precificacao.domain.ParametrosPrecificacao.CanalTaxa;
@@ -17,10 +18,13 @@ import com.confeitaria.precificacao.domain.ParametrosPrecificacao.Gas;
 import com.confeitaria.precificacao.domain.ParametrosPrecificacao.ItemCusto;
 import com.confeitaria.precificacao.domain.ParametrosPrecificacao.MaoDeObra;
 import com.confeitaria.precificacao.domain.ParametrosPrecificacao.RateioCustosFixos;
+import com.confeitaria.precificacao.domain.ParametrosPrecificacao.Tamanho;
 import com.confeitaria.precificacao.domain.ParametrosPrecificacao.UsoEquipamento;
 import com.confeitaria.precificacao.domain.PrecificacaoException;
 import com.confeitaria.receita.persistence.Receita;
 import com.confeitaria.receita.persistence.ReceitaRepository;
+import com.confeitaria.receita.persistence.ReceitaTamanho;
+import com.confeitaria.shared.domain.BaseQuantidade;
 import com.confeitaria.shared.domain.Decimais;
 import com.confeitaria.shared.error.RecursoNaoEncontradoException;
 import java.math.BigDecimal;
@@ -56,8 +60,8 @@ public class PrecificacaoService {
     }
 
     @Transactional
-    public PrecoResponse calcular(UUID ownerId, UUID receitaId) {
-        return executar(ownerId, receitaId, SimulacaoRequest.vazia(), false);
+    public PrecoResponse calcular(UUID ownerId, UUID receitaId, UUID tamanhoId) {
+        return executar(ownerId, receitaId, SimulacaoRequest.doTamanho(tamanhoId), false);
     }
 
     /** Mesmo cálculo com parâmetros alternativos. Não grava nada. */
@@ -72,6 +76,8 @@ public class PrecificacaoService {
         ConfiguracaoCustos config = configuracaoService.obterEntidade(ownerId);
         Bandeira bandeira = s.bandeira() != null ? s.bandeira() : config.getBandeiraVigente();
         BigDecimal margem = s.margemLucro() != null ? s.margemLucro() : receita.getMargemLucro();
+        ReceitaTamanho tamanho = s.tamanhoId() == null ? null : receita.tamanho(s.tamanhoId())
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Tamanho"));
 
         ParametrosPrecificacao parametros = new ParametrosPrecificacao(
                 receita.getRendimento(),
@@ -92,9 +98,19 @@ public class PrecificacaoService {
                 new RateioCustosFixos(RateioCustosFixos.Criterio.valueOf(config.getCriterioRateio().name()),
                         custosFixos.totalMensalAtivo(ownerId), config.getHorasTrabalhadasMes(),
                         receitas.totalVendasEstimadasMes(ownerId)),
-                canais(ownerId, s));
+                canais(ownerId, s),
+                tamanho == null ? null : tamanho(tamanho));
 
-        return PrecoResponse.of(receita.getId(), receita.getNome(), simulacao, bandeira, calculadora.calcular(parametros));
+        TamanhoCalculado calculado = tamanho == null ? null : new TamanhoCalculado(tamanho.getId(), tamanho.getNome(),
+                tamanho.getFracaoReceita(), tamanho.getRendimento());
+        return PrecoResponse.of(receita.getId(), receita.getNome(), simulacao, bandeira, calculado,
+                calculadora.calcular(parametros));
+    }
+
+    private static Tamanho tamanho(ReceitaTamanho t) {
+        ItemCusto embalagem = t.getEmbalagem() == null ? null : new ItemCusto(t.getEmbalagem().getNome(), "un",
+                t.getEmbalagensPorPeca(), BaseQuantidade.POR_UNIDADE, t.getEmbalagem().getCustoUnitario());
+        return new Tamanho(t.getNome(), t.getFracaoReceita(), t.getRendimento(), embalagem);
     }
 
     private Energia energia(UUID ownerId, Bandeira bandeira, BigDecimal tarifaSimulada) {

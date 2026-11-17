@@ -154,7 +154,7 @@ class ProducaoServiceTest {
     void capacidadeIndicaOItemLimitante() {
         when(receitas.findByIdAndOwnerId(bolo.getId(), DONA)).thenReturn(Optional.of(bolo));
 
-        var c = service.capacidade(DONA, bolo.getId());
+        var c = service.capacidade(DONA, bolo.getId(), null);
 
         assertThat(c.lotesPossiveis()).isEqualTo(1);
         assertThat(c.unidadesPossiveis()).isEqualTo(10);

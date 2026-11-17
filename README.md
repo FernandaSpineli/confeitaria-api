@@ -3,6 +3,8 @@
 API REST multiusuária para confeiteiras: calculadora de preço de venda (margem sobre o preço, por canal de venda,
 com detalhamento de cada custo) e controle de estoque com histórico imutável.
 
+![Tela de preço de uma receita](docs/tela-preco.png)
+
 **Stack:** Java 25 · Spring Boot 4.1 (Web MVC, Data JPA, Validation, Security + OAuth2 Resource Server) ·
 PostgreSQL 17 · Flyway · springdoc-openapi 3 · JUnit 5, Mockito, Testcontainers 2 · Docker Compose.
 
@@ -11,7 +13,8 @@ PostgreSQL 17 · Flyway · springdoc-openapi 3 · JUnit 5, Mockito, Testcontaine
 ```bash
 cp .env.example .env          # defina JWT_SECRET (>= 32 bytes) e a ADMIN inicial
 docker compose up -d --build
-open http://localhost:8080/swagger-ui.html   # botão Authorize aceita o access token
+open http://localhost:8080                    # aplicação web
+open http://localhost:8080/swagger-ui.html   # documentação da API (botão Authorize aceita o access token)
 ```
 
 Testes (unitários + integração com PostgreSQL em container; requer Docker):
@@ -27,7 +30,25 @@ mvn verify
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | localhost/confeitaria | conexão PostgreSQL |
 | `APP_ADMIN_EMAIL`, `APP_ADMIN_PASSWORD` | vazio | cria a primeira ADMIN na subida |
 
-## Testar em 5 minutos (Swagger)
+## Aplicação web
+
+Em **http://localhost:8080** há uma interface em português para usar tudo sem Swagger: criar conta, configurar
+custos, cadastrar insumos, embalagens, equipamentos, custos fixos e canais, montar receitas, ver o preço por
+canal, simular margens, registrar compras, ajustes e produções, e acompanhar o estoque. A conta ADMIN vê só a
+gestão de usuárias.
+
+- **Sem build:** HTML, CSS e JavaScript (módulos ES) em `src/main/resources/static`, servidos pela própria API.
+  Não há Node, bundler nem dependência de frontend.
+- **Sessão:** o access token fica só em memória. O refresh token fica no `localStorage`, para a sessão sobreviver
+  a um recarregamento. Um 401 dispara um único refresh, compartilhado entre as requisições em andamento.
+- **Segurança:** todo texto vindo da API entra no DOM como texto, nunca como HTML. Uma Content-Security-Policy
+  restrita (`script-src 'self'`) bloqueia scripts externos e inline.
+- **A fatia:** a composição do custo do lote aparece como as camadas de uma fatia de bolo, cada uma com a altura
+  proporcional ao seu peso no custo.
+
+<img src="docs/tela-celular.png" alt="Tela de preço no celular" width="260">
+
+## Testar a API em 5 minutos (Swagger)
 
 Com a stack no ar, abra **http://localhost:8080/swagger-ui.html** e siga os passos. Cada bloco é o corpo da
 requisição; os ids vêm das respostas anteriores.
@@ -183,6 +204,7 @@ receita ativa responde 409.
 | `ProducaoServiceTest` (Mockito) | baixa + histórico, nada muda quando falta estoque, receita alheia → 404 |
 | `IsolamentoEntreUsuariasIT` | toda leitura/escrita cruzada responde 404, listagens isoladas, perfis 401/403 |
 | `AutenticacaoIT` | validação, login, rotação e detecção de reuso do refresh, logout, desativação pela admin |
+| `FrontendIT` | página e arquivos estáticos públicos, demais caminhos e métodos continuam fechados |
 | `FluxoBoloIT` | o [exemplo do bolo](docs/exemplo-bolo.md) inteiro pela API, mais o trigger de imutabilidade |
 | `ConcorrenciaProducaoIT` | 20 produções simultâneas sobre estoque para 10 lotes: saldo consistente e nunca negativo |
 

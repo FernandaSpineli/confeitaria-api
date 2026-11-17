@@ -7,21 +7,25 @@ com detalhamento de cada custo) e controle de estoque com histórico imutável.
 
 **Stack:** Java 25 · Spring Boot 4.1 (Web MVC, Data JPA, Validation, Security + OAuth2 Resource Server) ·
 PostgreSQL 17 · Flyway · springdoc-openapi 3 · JUnit 5, Mockito, Testcontainers 2 · Docker Compose.
+**Frontend:** React 19 · TypeScript · Vite · React Router · TanStack Query · Vitest + Testing Library.
 
 ## Como rodar
 
 ```bash
 cp .env.example .env          # defina JWT_SECRET (>= 32 bytes) e a ADMIN inicial
 docker compose up -d --build
-open http://localhost:8080                    # aplicação web
+open http://localhost:8080                    # aplicação web (conta demo: demo@exemplo.com / senha12345)
 open http://localhost:8080/swagger-ui.html   # documentação da API (botão Authorize aceita o access token)
 ```
 
-Testes (unitários + integração com PostgreSQL em container; requer Docker):
+Testes (frontend com Vitest, unitários e integração com PostgreSQL em container; requer Docker):
 
 ```bash
 mvn verify
 ```
+
+O Maven baixa o Node, instala as dependências do frontend, gera o build do React dentro do jar e roda os testes
+do frontend junto com os do backend. Não é preciso ter Node instalado.
 
 | Variável | Padrão | Uso |
 |---|---|---|
@@ -51,19 +55,24 @@ O custo do pote aparece como R$ 9,12 (arredondamento `HALF_EVEN`), mas o preço 
 
 ## Aplicação web
 
-Em **http://localhost:8080** há uma interface em português para usar tudo sem Swagger: criar conta, configurar
-custos, cadastrar insumos, embalagens, equipamentos, custos fixos e canais, montar receitas, ver o preço por
-canal, simular margens, registrar compras, ajustes e produções, e acompanhar o estoque. A conta ADMIN vê só a
-gestão de usuárias.
+Em **http://localhost:8080** há uma aplicação React em português para usar tudo sem Swagger: criar conta, configurar
+custos, cadastrar insumos, embalagens, equipamentos, custos fixos e canais, montar receitas com tamanhos, comparar
+o preço de cada tamanho, simular margens, registrar compras, ajustes e produções, e acompanhar o estoque. A conta
+ADMIN vê só a gestão de usuárias.
 
-- **Sem build:** HTML, CSS e JavaScript (módulos ES) em `src/main/resources/static`, servidos pela própria API.
-  Não há Node, bundler nem dependência de frontend.
+- **Integrada à API:** o código fica em `frontend/` (React + TypeScript + Vite). O `frontend-maven-plugin` gera o
+  build em `target/classes/static`, e o Spring Boot serve as telas no mesmo endereço e porta da API.
+- **Desenvolvimento:** com a API no ar, `cd frontend && npm install && npm run dev` abre o Vite em
+  http://localhost:5173 com recarga instantânea e proxy de `/api` para a porta 8080.
+- **Dados:** TanStack Query guarda as respostas e atualiza as telas depois de cada gravação. Rotas por hash
+  (`#/receitas/...`), então qualquer endereço funciona sem regra extra no servidor.
 - **Sessão:** o access token fica só em memória. O refresh token fica no `localStorage`, para a sessão sobreviver
   a um recarregamento. Um 401 dispara um único refresh, compartilhado entre as requisições em andamento.
-- **Segurança:** todo texto vindo da API entra no DOM como texto, nunca como HTML. Uma Content-Security-Policy
-  restrita (`script-src 'self'`) bloqueia scripts externos e inline.
-- **A fatia:** a composição do custo do lote aparece como as camadas de uma fatia de bolo, cada uma com a altura
-  proporcional ao seu peso no custo.
+- **Segurança:** o React escapa todo texto vindo da API, e o build não tem script inline, então a
+  Content-Security-Policy restrita (`script-src 'self'`) continua valendo.
+- **A fatia:** a composição do custo aparece como as camadas de uma fatia de bolo, cada uma com a altura
+  proporcional ao seu peso no custo. Receitas com tamanhos mostram um cartão por tamanho, com o preço e uma barra
+  de quanto da receita cada um usa.
 
 <img src="docs/tela-celular.png" alt="Tela de preço no celular" width="260">
 
@@ -226,7 +235,8 @@ receita ativa (ou como embalagem de um tamanho) responde 409.
 | `ProducaoServiceTest` (Mockito) | baixa + histórico, nada muda quando falta estoque, receita alheia → 404 |
 | `IsolamentoEntreUsuariasIT` | toda leitura/escrita cruzada responde 404, listagens isoladas, perfis 401/403 |
 | `AutenticacaoIT` | validação, login, rotação e detecção de reuso do refresh, logout, desativação pela admin |
-| `FrontendIT` | página e arquivos estáticos públicos, demais caminhos e métodos continuam fechados |
+| `FrontendIT` | o build do React é servido sem login (todos os bundles referenciados respondem 200, sem script inline); demais caminhos e métodos continuam fechados |
+| Vitest (`frontend/src/**/*.test.ts*`) | formatação em reais, frações da receita por extenso, camadas e legenda da fatia |
 | `FluxoBoloIT` | o [exemplo do bolo](docs/exemplo-bolo.md) inteiro pela API, mais o trigger de imutabilidade |
 | `TortaHolandesaIT` | preço, simulação, capacidade e produção por tamanho; nomes repetidos, tamanho de outra receita, embalagem em uso; a conta de demonstração |
 | `ConcorrenciaProducaoIT` | 20 produções simultâneas sobre estoque para 10 lotes: saldo consistente e nunca negativo |

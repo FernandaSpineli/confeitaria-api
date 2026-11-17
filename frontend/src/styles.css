@@ -138,7 +138,7 @@ button.perigo:hover { background: #f7e1de; }
 button[disabled] { opacity: .55; cursor: progress; }
 
 form.campos { display: grid; gap: 1rem; }
-.grade { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.grade { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
 label.campo { display: grid; gap: .3rem; font-weight: 700; font-size: var(--step--1); }
 label.campo .dica { font-weight: 400; color: var(--ink-soft); }
 label.check { display: flex; gap: .55rem; align-items: center; font-size: var(--step--1); }
@@ -316,3 +316,37 @@ dialog::backdrop { background: rgba(43, 27, 46, .5); }
 .lista-simples li { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--line); }
 .lista-simples li:last-child { border-bottom: 0; }
 details summary { cursor: pointer; font-weight: 700; }
+
+/* ---------- sizes: one card per way of selling the recipe ---------- */
+.tamanhos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
+button.tamanho {
+    display: grid;
+    gap: .35rem;
+    align-content: start;
+    text-align: left;
+    font: inherit;
+    color: var(--ink);
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius-m);
+    padding: 1rem 1.1rem 1.05rem;
+}
+button.tamanho:hover { background: #fdf8fb; border-color: #d6c4d9; }
+button.tamanho[aria-selected="true"] { border-color: var(--raspberry); box-shadow: inset 0 0 0 1.5px var(--raspberry); }
+.tamanho-nome { font-family: var(--display); font-weight: 700; font-size: var(--step-1); line-height: 1.15; }
+/* how much of the recipe the size uses, relative to the biggest size */
+.tamanho-medida { display: block; height: 8px; border-radius: 99px; background: var(--wash); overflow: hidden; margin: .15rem 0; }
+.tamanho-medida > span { display: block; height: 100%; border-radius: inherit; background: var(--c-insumo); }
+button.tamanho[aria-selected="true"] .tamanho-medida > span { background: var(--raspberry-dark); }
+.tamanho-preco { font-family: var(--display); font-weight: 800; font-size: var(--step-2); letter-spacing: -0.02em; line-height: 1; margin-top: .2rem; }
+.tamanho-preco .small { font-family: var(--body); font-weight: 400; letter-spacing: 0; color: var(--ink-soft); }
+.tamanhos-lista { color: var(--ink-soft); }
+
+.item-linha.tam { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
+.item-linha.tam > label.campo { flex: 1 1 150px; }
+.item-linha.tam > label.campo:first-child { flex-basis: 200px; }
+.item-linha.tam > button { flex: none; }
+@media (max-width: 700px) {
+    .item-linha.tam { padding-bottom: .75rem; border-bottom: 1px solid var(--line); }
+}
+dialog .dialogo-corpo form.campos { gap: 1rem; }

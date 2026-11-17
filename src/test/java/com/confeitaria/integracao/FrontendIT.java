@@ -6,6 +6,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /** O frontend é conteúdo estático público; fora da API, todo o resto continua fechado. */
@@ -25,18 +29,25 @@ class FrontendIT extends AbstractIntegrationTest {
         HttpResponse<String> page = send("GET", "/");
         assertThat(page.statusCode()).isEqualTo(200);
         assertThat(page.headers().firstValue("Content-Type")).hasValueSatisfying(t -> assertThat(t).startsWith("text/html"));
-        assertThat(page.body()).contains("/assets/js/app.js").contains("Content-Security-Policy");
+        assertThat(page.body()).contains("Content-Security-Policy").contains("<div id=\"app\">");
 
-        for (String asset : new String[] {"/assets/app.css", "/assets/js/app.js", "/assets/js/api.js",
-                "/assets/js/views/receitas.js", "/assets/favicon.svg"}) {
+        // The React build (Vite) references hashed bundles; every one of them must be served.
+        Matcher m = Pattern.compile("(?:src|href)=\"(/assets/[^\"]+)\"").matcher(page.body());
+        List<String> assets = new ArrayList<>();
+        while (m.find()) {
+            assets.add(m.group(1));
+        }
+        assertThat(assets).anyMatch(a -> a.endsWith(".js")).anyMatch(a -> a.endsWith(".css")).contains("/assets/favicon.svg");
+        for (String asset : assets) {
             assertThat(send("GET", asset).statusCode()).as(asset).isEqualTo(200);
         }
+        assertThat(page.body()).as("no inline scripts (CSP script-src self)").doesNotContain("<script>");
     }
 
     @Test
     void mantemFechadosCaminhosDesconhecidosEOutrosMetodos() throws Exception {
         assertThat(send("GET", "/qualquer-coisa").statusCode()).isEqualTo(401);
-        assertThat(send("POST", "/assets/app.css").statusCode()).isEqualTo(401);
+        assertThat(send("POST", "/assets/favicon.svg").statusCode()).isEqualTo(401);
         assertThat(send("GET", "/api/v1/insumos").statusCode()).isEqualTo(401);
     }
 }

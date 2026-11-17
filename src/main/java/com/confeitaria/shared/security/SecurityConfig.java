@@ -43,6 +43,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/refresh").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
                                 "/actuator/health", "/error").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasRole(ADMIN)
                         .requestMatchers("/api/v1/me", "/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/**").hasRole(CONFEITEIRA)
